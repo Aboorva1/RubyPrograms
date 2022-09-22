@@ -1,115 +1,111 @@
 $order = 0
 $available_denominations = []
-$details_of_orders = []
-$storing_denominations = {}
+$order_details = []
+$denominations_after_order_placed = {}
+$denomination_when_order_cancelled = {}
 $initial_denominations = {
     '2000' => 10, 
     '500' => 10, 
     '200' => 10, 
-    '100' => 5, 
+    '100' => 0, 
     '50' => 1, 
-    '20' => 10, 
-    '10c' => 10, 
+    '20' => 2, 
+    '10c' => 1, 
     '5c' => 0,
     '2c' => 0,
     '1c' => 0, 
     '10' => 10, 
-    '5' => 2, 
+    '5' => 0, 
     '1' => 0}
-
-def initial_cashbox_amount
-    cash = [2000,500,200,100,50,20,10,5,2,1,10,5,1] 
-    total_cashbox_amount = 0
-    index = 0
-    $initial_denominations.each do |denomination, count|
-        total_cashbox_amount += (cash[index] * count)
-        index += 1
-    end
-    return total_cashbox_amount
-end
 
 def calculate_cashbox_amount
     cash = [2000,500,200,100,50,20,10,5,2,1,10,5,1] 
     total_cashbox_amount = 0
-    index = 0
-    $storing_denominations.each do |denomination, count|
-        total_cashbox_amount += (cash[index] * count)
-        index += 1
+    denomination_index = 0
+    $initial_denominations.each do |denomination, count|
+        total_cashbox_amount += (cash[denomination_index] * count)
+        denomination_index += 1
     end
     return total_cashbox_amount
 end
 
-
-def get_denominations(given_amount)
+def get_denominations_from_customer(given_amount)
     puts "Enter denominations : "
     denomination_given = gets.chomp
     total_amount = denomination_given.to_i
-    $storing_denominations = $initial_denominations
+    $denominations_after_order_placed = $initial_denominations
     while total_amount < given_amount
-        $storing_denominations[denomination_given.to_s] += 1
+        $denominations_after_order_placed[denomination_given.to_s] += 1
         denomination_given = gets.chomp
         total_amount += denomination_given.to_i
     end
-    $storing_denominations[denomination_given.to_s] += 1 
-    $initial_denominations = $storing_denominations  ######
+    $denominations_after_order_placed[denomination_given.to_s] += 1 
+    $initial_denominations = $denominations_after_order_placed  
 end
 
-
-def check_insufficiency(balance_amount, updated_denominations, denomination_to_customer)
+def chocolate_for_change(balance_amount, denominations_after_balance_given, denomination_to_customer)
     if (balance_amount > 0 && balance_amount < 10)
         puts "There is no sufficient denominations. Would you like to take a chocolate for #{balance_amount} : Y/N"
         chocolate = gets.chomp
-        if chocolate == "Y"
-            $details_of_orders << denomination_to_customer
+        if chocolate.casecmp?('y') 
+            $order_details << denomination_to_customer
             calculate_cashbox_amount + balance_amount
-            return updated_denominations
+            return denominations_after_balance_given
         else
             puts "Order cancelled"
-            $details_of_orders.pop
-            return $initial_denominations   #.difference(updated_denominations)  
+            $order_details.pop
+            return $denomination_when_order_cancelled   
         end    
     end
 end
 
+def check_insufficiency(balance_denomination_array) 
+    if balance_denomination_array[0] == 0
+        $denominations_after_order_placed = balance_denomination_array[1]
+    else
+        $denominations_after_order_placed = chocolate_for_change(balance_denomination_array[0], balance_denomination_array[1], balance_denomination_array[3]) 
+    end
+end
+
+def balance_denomination(balance_amount, denomination, denominations_after_balance_given)
+    denomination_to_customer = {}
+    while balance_amount >= denomination.to_i
+        count_of_denomination = balance_amount/denomination.to_i
+        if count_of_denomination <= denominations_after_balance_given[denomination.to_s]
+            denomination_to_customer[denomination.to_s] = count_of_denomination
+            denominations_after_balance_given[denomination.to_s] -= count_of_denomination
+            balance_amount = balance_amount % (denomination.to_i)
+        else
+            denomination_to_customer[denomination.to_s] = denominations_after_balance_given[denomination.to_s]
+            balance_amount = balance_amount - ((denomination.to_i) * (denomination_to_customer[denomination.to_s]))
+            denominations_after_balance_given[denomination.to_s] -= denominations_after_balance_given[denomination.to_s]
+            break
+        end
+    end
+    return balance_amount, denominations_after_balance_given, denomination_to_customer
+end
 
 def balance_to_be_given(balance_amount, given_amount, bill_amount)
     new_order = []
     new_order << $order << bill_amount << given_amount << balance_amount 
-    $details_of_orders << new_order
-    denomination_to_customer = {}
-    index = 0
-    updated_denominations = $storing_denominations
+    $order_details << new_order
+    available_denomination_index = 0
+    denominations_after_balance_given = $denominations_after_order_placed
     if given_amount >= bill_amount
-        while index < $available_denominations.length 
-            if (($available_denominations[index]).include?("c"))
-                denomination = $available_denominations[index]
+        while available_denomination_index < $available_denominations.length 
+            if (($available_denominations[available_denomination_index]).include?("c"))
+                denomination = $available_denominations[available_denomination_index]
             else
-                denomination = ($available_denominations[index]).to_i
+                denomination = ($available_denominations[available_denomination_index]).to_i
             end
-            while balance_amount >= denomination.to_i
-                value = balance_amount/denomination.to_i
-                if value <= updated_denominations[denomination.to_s]
-                    denomination_to_customer[denomination.to_s] = balance_amount/(denomination.to_i)
-                    updated_denominations[denomination.to_s] -= balance_amount/(denomination.to_i)
-                    balance_amount = balance_amount % (denomination.to_i)
-                else
-                    denomination_to_customer[denomination.to_s] = updated_denominations[denomination.to_s]
-                    balance_amount = balance_amount - ((denomination.to_i) * (denomination_to_customer[denomination.to_s]))
-                    updated_denominations[denomination.to_s] -= updated_denominations[denomination.to_s]
-                    break
-                end
-            end
-            index += 1
-            if balance_amount == 0
-                $details_of_orders << denomination_to_customer
+            balance_denomination_array = balance_denomination(balance_amount, denomination, denominations_after_balance_given) 
+            available_denomination_index += 1
+            if balance_denomination_array[0] == 0
+                $order_details << balance_denomination_array[2]
                 break 
             end
         end
-        if balance_amount == 0
-            $storing_denominations = updated_denominations
-        else
-            $storing_denominations = check_insufficiency(balance_amount,updated_denominations, denomination_to_customer) 
-        end   
+        check_insufficiency(balance_denomination_array)  
     end
 end
 
@@ -123,7 +119,7 @@ def create_order
         puts "Give valid amount"
         given_amount = gets.chomp.to_i
     end
-    get_denominations(given_amount)
+    get_denominations_from_customer(given_amount)
     $initial_denominations.each do |denomination, count|
         if count != 0
             $available_denominations << denomination.to_s
@@ -134,12 +130,12 @@ def create_order
 end
 
 def display_details
-    puts "Denominations available : ", $storing_denominations
-    if $details_of_orders.empty?()
+    puts "Denominations available : ", $denominations_after_order_placed
+    if $order_details.empty?()
         puts "No details available"
     else
-        puts "Order no        Bill amount       Given amount        Balance amount        Balance denomination"
-        for detail in $details_of_orders
+        puts "Order no        Bill amount       Given amount        Balance amount       Balance denomination"
+        for detail in $order_details
             print detail
         end
         puts 
@@ -147,32 +143,24 @@ def display_details
     puts "Amount in cashbox:", calculate_cashbox_amount
 end
       
-
-while true
-    puts "Hi! Welcome..."
-    puts "Do you want to purchase: Y/N   //  Display details: D  "
-    purchase = gets.chomp
-    puts "Initial cashbox amount: ", initial_cashbox_amount
-    if purchase == 'Y'
-        if initial_cashbox_amount != 0
-            create_order
-        else
-            puts "Cashbox empty! Add amount to cashbox"
+def main
+    while true
+        puts "Hi! Welcome..."
+        puts "Do you want to purchase: Y/N"
+        purchase = gets.chomp
+        $denomination_when_order_cancelled = $initial_denominations.clone
+        cashbox_amount = calculate_cashbox_amount
+        puts "Initial cashbox amount: ", cashbox_amount
+        if purchase.casecmp? ("y")
+            if cashbox_amount != 0
+                create_order
+            else
+                puts "Cashbox empty! Add amount to cashbox"
+            end
+        else 
+            display_details
         end
-    elsif purchase == 'D'
-        display_details
-    else
-        break
     end
-end
+end    
 
-      
-
-    
-    
-
-
-
-
-
-    
+main()
